@@ -1,16 +1,30 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Loader = require(game:GetService('ReplicatedStorage').src.Loader)
+local ItemInventoryServiceClient = Loader.load_client_service(script, "ItemInventoryServiceClient")
 
--- Function to check the inventory for a specific item
-local function getItemCount(itemName)
-    local player = game.Players.LocalPlayer
-    local backpack = player:FindFirstChild("Backpack") -- Check the Backpack for items
-    if backpack then
-        local item = backpack:FindFirstChild(itemName)
-        if item then
-            return item.Value -- Assuming the item has a Value property that indicates the count
+-- Function to get normal items
+function get_inventory_items()
+    return ItemInventoryServiceClient["session"]["inventory"]['inventory_profile_data']['normal_items']
+end
+
+-- Function to count specific materials
+function countMaterials(materialsToCount)
+    local normalItems = get_inventory_items()
+    local materialCounts = {}
+
+    -- Initialize counts for the materials we want to count
+    for _, material in ipairs(materialsToCount) do
+        materialCounts[material] = 0
+    end
+
+    -- Count the materials in the normal items
+    for itemName, itemCount in pairs(normalItems) do
+        if materialCounts[itemName] ~= nil then
+            materialCounts[itemName] = materialCounts[itemName] + itemCount -- Directly use itemCount
         end
     end
-    return 0
+
+    return materialCounts
 end
 
 -- Function to craft ingots_steel from 15 ore_steel
@@ -24,12 +38,12 @@ local function craftIngotsSteel()
 end
 
 -- Function to join the lobby
-local function joinLobby()
+local function joinLobby(lobbyName)
     local args = {
-        [1] = "_lobbytemplategreen4"
+        [1] = lobbyName
     }
     ReplicatedStorage.endpoints.client_to_server.request_join_lobby:InvokeServer(unpack(args))
-    print("Joined lobby: _lobbytemplategreen4") -- Notification for joining lobby
+    print("Joined lobby: " .. lobbyName) -- Notification for joining lobby
 end
 
 -- Function to lock the level
@@ -56,37 +70,42 @@ end
 
 -- Main execution loop
 while true do
-    -- Check the counts of ore_steel, ingots_steel, book_material, devil_heart, and julius_page
-    local oreSteelCount = getItemCount("ore_steel")
-    local ingotsSteelCount = getItemCount("ingots_steel")
-    local bookMaterialCount = getItemCount("book_material")
-    local devilHeartCount = getItemCount("devil_heart")
-    local juliusPageCount = getItemCount("julius_page")
+    -- Specify the materials you want to count
+    local materialsToCount = {
+        "ore_steel",
+        "ingots_steel",
+        "book_material",
+        "devil_heart",
+        "julius_page"
+    }
+
+    -- Count the materials
+    local materialCounts = countMaterials(materialsToCount)
+
+    print("Material Counts:")
+    for material, count in pairs(materialCounts) do
+        print(material .. ": " .. count)
+    end 
 
     -- Craft ingots_steel if there are at least 15 ore_steel
-    if oreSteelCount >= 15 then
+    if materialCounts["ore_steel"] >= 15 then
         craftIngotsSteel()
     end
 
-    -- If ingots_steel is below 18 or book_material is below 25, join clover_legend_2 and lock the level
-    if ingotsSteelCount < 18 or bookMaterialCount < 25 then
-        joinLobby() -- Join the lobby
-        wait(2) -- Wait for a short period to ensure the lobby join is processed
+    -- Check conditions for joining lobbies
+    if materialCounts["ingots_steel"] < 18 or materialCounts["book_material"] < 25 then
+        joinLobby ("_lobbytemplategreen4") -- Join clover_legend_2
         lockLevel("clover_legend_2") -- Lock the level to clover_legend_2
-    end
-
-    -- If devil_heart is below 2 or julius_page is below 25, join clover_legend_3 and lock the level
-    if devilHeartCount < 2 or juliusPageCount < 25 then
-        joinLobby() -- Join the lobby
-        wait(2) -- Wait for a short period to ensure the lobby join is processed
+    elseif materialCounts["devil_heart"] < 2 or materialCounts["julius_page"] < 25 then
+        joinLobby("_lobbytemplategreen4") -- Join clover_legend_3
         lockLevel("clover_legend_3") -- Lock the level to clover_legend_3
     end
 
     -- If all materials are sufficient, craft hourglass_relic
-    if ingotsSteelCount >= 18 and bookMaterialCount >= 25 and devilHeartCount >= 2 and juliusPageCount >= 25 then
+    if materialCounts["ingots_steel"] >= 18 and materialCounts["book_material"] >= 25 and materialCounts["devil_heart"] >= 2 and materialCounts["julius_page"] >= 25 then
         craftHourglassRelic() -- Craft the hourglass_relic
-        wait(2) -- Wait for a short period to ensure the crafting is processed
+        wait(2) -- Wait for a short period to ensure the crafting process is completed
     end
 
-    wait(10) -- Wait for 10 seconds before checking again (adjust as needed)
+    wait(10) -- Wait before the next iteration to avoid spamming requests
 end
